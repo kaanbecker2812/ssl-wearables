@@ -11,7 +11,8 @@ tramp
 runs/
 
 # data files
-data/*
+data/UKBB/*
+raw_data/*
 
 # intermediate files
 *.log
