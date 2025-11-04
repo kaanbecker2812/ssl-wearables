@@ -10,12 +10,13 @@ gpu_ids: [0, 1, 2]  # gpus to use if multi_gpu==true
 multi_gpu: false
 num_split: 5
 augmentation: false
-root_path: "${data.data_root}/"
-model_path: "${root_path}models/"
-logging_path: "${root_path}logs/"
-report_root: "${root_path}reports/"
-# report_path: "${report_root}${data.dataset_name}_${evaluation.evaluation_name}_${data.subject_count}.csv"
-report_path: "${report_root}${data.dataset_name}_${evaluation.evaluation_name}_${data.subject_count}_${evaluation.subR}.csv"
+root: /Users/kaanbecker/Documents/VSCode/EASE_pretrained_models/ssl_wearables/ssl-wearables
+data_name: EASE_30Hz_0.4w_0.2s
+
+# output paths
+model_path: "${root}/experiments/${data_name}/models/"
+logging_path: "${root}/experiments/${data_name}/logs/"
+report_path: "${root}/experiments/${data_name}/reports/"
 is_verbose: false
 
 custom_resnet: true

@@ -286,7 +286,7 @@ def mlp_predict(model, data_loader, my_device, cfg):
                 pred_y = model(my_X)
             else:
                 true_y = my_Y.to(my_device, dtype=torch.long)
-                logits = model(my_X)
+                logits, _ = model(my_X)
                 pred_y = torch.argmax(logits, dim=1)
 
             true_list.append(true_y.cpu())
@@ -334,9 +334,9 @@ def setup_model(cfg, my_device):
     if cfg.evaluation.load_weights:
         print("Loading weights from %s" % cfg.evaluation.flip_net_path)
         if cfg.custom_resnet:
-            load_weights_custom(os.path.join(get_original_cwd(), cfg.evaluation.flip_net_path), model, my_device)
+            load_weights_custom(cfg.evaluation.flip_net_path, model, my_device)
         else:
-            load_weights(os.path.join(get_original_cwd(), cfg.evaluation.flip_net_path), model, my_device)
+            load_weights(cfg.evaluation.flip_net_path, model, my_device)
     if cfg.evaluation.freeze_weight:
         if cfg.custom_resnet:
             print("Freezing weights for custom resnet")
@@ -434,7 +434,7 @@ def evaluate_mlp(X_feats, y, cfg, my_device, logger, groups=None):
         )
         results.extend(result)
 
-    pathlib.Path(cfg.report_root).mkdir(parents=True, exist_ok=True)
+    #pathlib.Path(cfg.report_root).mkdir(parents=True, exist_ok=True)
     classification_report(results, cfg.report_path)
 
 
@@ -752,16 +752,14 @@ def main(cfg):
     logger.setLevel(logging.INFO)
     now = datetime.now()
     dt_string = now.strftime("%d-%m-%Y_%H:%M:%S")
-    log_dir = os.path.join(get_original_cwd() + cfg.logging_path)
-    pathlib.Path(log_dir).mkdir(parents=True, exist_ok=True)
-    log_dir = os.path.join(log_dir,
+
+    pathlib.Path(cfg.logging_path).mkdir(parents=True, exist_ok=True)
+    log_dir = os.path.join(cfg.logging_path,
                            cfg.evaluation.evaluation_name + "_" + dt_string + ".log")
-    
-    cfg.model_path = os.path.join(get_original_cwd() + cfg.model_path)
+
     pathlib.Path(cfg.model_path).mkdir(parents=True, exist_ok=True)
     cfg.model_path = os.path.join(cfg.model_path, dt_string + "tmp.pt")
 
-    cfg.report_path = os.path.join(get_original_cwd() + cfg.report_root)
     pathlib.Path(cfg.report_path).mkdir(parents=True, exist_ok=True)
     cfg.report_path = os.path.join(cfg.report_path,
                                    cfg.evaluation.evaluation_name + "_" + dt_string + ".csv")
@@ -775,8 +773,6 @@ def main(cfg):
     np.random.seed(42)
     torch.manual_seed(42)
 
-    print(cfg.model_path)
-    print(cfg.report_path)
     # ----------------------------
     #
     #            Main
@@ -784,9 +780,9 @@ def main(cfg):
     # ----------------------------
 
     # Load dataset
-    X = np.load(get_original_cwd() + cfg.data.X_path)
-    Y = np.load(get_original_cwd() + cfg.data.Y_path)
-    P = np.load(get_original_cwd() + cfg.data.PID_path)  # participant IDs
+    X = np.load(cfg.data.X_path)
+    Y = np.load(cfg.data.Y_path)
+    P = np.load(cfg.data.PID_path)  # participant IDs
 
     sample_rate = cfg.data.sample_rate
     task_type = cfg.data.task_type

@@ -1,4 +1,4 @@
-data_root: /data/downstream/EASE_30Hz_0.4w_0.2s
+data_root: "${root}/data/downstream/EASE_30Hz_0.4w_0.2s"
 X_path: "${data.data_root}/X.npy"
 Y_path:  "${data.data_root}/Y.npy"
 PID_path:  "${data.data_root}/pid.npy"
@@ -9,6 +9,6 @@ subject_count: -1
 ratio2keep: 1
 weighted_sample: true
 batch_size: 50
-held_one_subject_out: true
+held_one_subject_out: false
 output_size: 4
 weighted_loss_fn: true

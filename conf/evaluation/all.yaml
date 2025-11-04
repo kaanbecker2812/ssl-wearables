@@ -11,7 +11,7 @@ flip_net_ft: true
 flip_net_random_mlp: false
 load_weights: true
 freeze_weight: true
-flip_net_path: "model_check_point/mtl_5_best.mdl"
+flip_net_path: "${root}/model_check_point/mtl_5_best.mdl"
 input_size: 150  # input size after resampling the raw data
 subR: 1
 
@@ -19,7 +19,7 @@ subR: 1
 learning_rate: 0.0001
 num_workers: 6
 patience: 5
-num_epoch: 50
+num_epoch: 1
 
 evaluation_name: EASE_flipnet_finetune_all
 
