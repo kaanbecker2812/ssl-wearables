@@ -15,7 +15,7 @@ from torchvision import transforms
 import pathlib
 
 # SSL net
-from sslearning.models.accNet import cnn1, SSLNET, Resnet, EncoderMLP
+from sslearning.models.accNet import cnn1, SSLNET, Resnet, EncoderMLP, MultiIMUFusion
 from sslearning.scores import classification_scores, classification_report
 import copy
 from sklearn import preprocessing
@@ -31,6 +31,7 @@ import logging
 from datetime import datetime
 import collections
 from hydra.utils import get_original_cwd
+import torch.nn.functional as F
 
 """
 python downstream_task_evaluation.py -m data=rowlands_10s,oppo_10s
@@ -53,8 +54,11 @@ def set_bn_eval(m):
     if classname.find("BatchNorm1d") != -1:
         m.eval()
 
+def set_bn_train(m):
+    if isinstance(m, torch.nn.BatchNorm1d):
+        m.train()
 
-def freeze_weights(model):
+def freeze_weights(model, unfreeze=False):
     i = 0
     # Set Batch_norm running stats to be frozen
     # Only freezing ConV layers for now
@@ -62,10 +66,14 @@ def freeze_weights(model):
     # http://blog.datumbox.com/the-batch-normalization-layer-of-keras-is-broken/
     for name, param in model.named_parameters():
         if name.split(".")[0] == "feature_extractor":
-            param.requires_grad = False
+            param.requires_grad = False if not unfreeze else True
             i += 1
-    print("Weights being frozen: %d" % i)
-    model.apply(set_bn_eval)
+    if not unfreeze:
+        print("Weights being frozen: %d" % i)
+        model.apply(set_bn_eval) 
+    else:
+        print("Weights being unfrozen: %d" % i)
+        model.apply(set_bn_train)
 
 
 def evaluate_model(model, data_loader, my_device, loss_fn, cfg):
@@ -81,7 +89,7 @@ def evaluate_model(model, data_loader, my_device, loss_fn, cfg):
             else:
                 true_y = my_Y.to(my_device, dtype=torch.long)
 
-            logits = model(my_X)
+            logits, _ = model(my_X, train_mode=False)
             loss = loss_fn(logits, true_y)
 
             pred_y = torch.argmax(logits, dim=1)
@@ -209,6 +217,10 @@ def train_mlp(model, train_loader, val_loader, cfg, my_device, weights):
         patience=cfg.evaluation.patience, path=cfg.model_path, verbose=True
     )
     for epoch in range(cfg.evaluation.num_epoch):
+        t0 = datetime.now()
+        if epoch == 5:
+            # unfreeze weights
+            freeze_weights(model, unfreeze=True)
         model.train()
         train_losses = []
         train_acces = []
@@ -220,8 +232,13 @@ def train_mlp(model, train_loader, val_loader, cfg, my_device, weights):
             else:
                 true_y = my_Y.to(my_device, dtype=torch.long)
 
-            logits = model(my_X)
-            loss = loss_fn(logits, true_y)
+            logits, aux_logits = model(my_X, train_mode=True)
+            loss_main = loss_fn(logits, true_y)
+            loss_aux  = sum(loss_fn(l, true_y) for l in aux_logits) / len(aux_logits)
+            # (optional) consistency: encourage aux to match fused
+            cons = sum(F.kl_div(F.log_softmax(l,dim=-1), F.softmax(logits.detach(),dim=-1), reduction='batchmean')
+                    for l in aux_logits) / len(aux_logits)
+            loss = loss_main + 0.3*loss_aux + 0.1*cons
             loss.backward()
             optimizer.step()
 
@@ -241,7 +258,10 @@ def train_mlp(model, train_loader, val_loader, cfg, my_device, weights):
         print_msg = (
             f"[{epoch:>{epoch_len}}/{cfg.evaluation.num_epoch:>{epoch_len}}] "
             + f"train_loss: {np.mean(train_losses):.5f} "
+            + f"train_acc: {np.mean(train_acces):.5f} "
             + f"valid_loss: {val_loss:.5f}"
+            + f" valid_acc: {val_acc:.5f} "
+            + f"time: {datetime.now() - t0}"
         )
         early_stopping(val_loss, model)
         print(print_msg)
@@ -284,6 +304,10 @@ def mlp_predict(model, data_loader, my_device, cfg):
 def init_model(cfg, my_device):
     if cfg.model.is_ae:
         model = EncoderMLP(cfg.data.output_size)
+    elif cfg.custom_resnet:
+        model = MultiIMUFusion(num_sensors=cfg.num_sensors,
+                               class_num=cfg.data.output_size,
+                               L=cfg.L)
     elif cfg.model.resnet_version > 0:
         model = Resnet(
             output_size=cfg.data.output_size,
@@ -309,9 +333,16 @@ def setup_model(cfg, my_device):
 
     if cfg.evaluation.load_weights:
         print("Loading weights from %s" % cfg.evaluation.flip_net_path)
-        load_weights(cfg.evaluation.flip_net_path, model, my_device)
+        if cfg.custom_resnet:
+            load_weights_custom(os.path.join(get_original_cwd(), cfg.evaluation.flip_net_path), model, my_device)
+        else:
+            load_weights(os.path.join(get_original_cwd(), cfg.evaluation.flip_net_path), model, my_device)
     if cfg.evaluation.freeze_weight:
-        freeze_weights(model)
+        if cfg.custom_resnet:
+            print("Freezing weights for custom resnet")
+            freeze_weights(model.module.resnet if cfg.multi_gpu else model.resnet)
+        else:
+            freeze_weights(model)
     return model
 
 
@@ -339,6 +370,7 @@ def train_test_mlp(
     encoder=None,
 ):
     model = setup_model(cfg, my_device)
+    #model = patch_for_short_windows(model, cfg=cfg, device=my_device)
     if cfg.is_verbose:
         print(model)
     train_loader, val_loader, test_loader, weights = setup_data(
@@ -347,6 +379,7 @@ def train_test_mlp(
     train_mlp(model, train_loader, val_loader, cfg, my_device, weights)
 
     model = init_model(cfg, my_device)
+    #model = patch_for_short_windows(model, cfg=cfg, device=my_device)
 
     model.load_state_dict(torch.load(cfg.model_path))
 
@@ -665,8 +698,53 @@ def load_weights(weight_path, model, my_device):
         model.load_state_dict(model_dict)
     print("%d Weights loaded" % len(pretrained_dict))
 
+def load_weights_custom(weight_path, model, my_device):
+    # only need to change weights name when
+    # the model is trained in a distributed manner
 
-@hydra.main(config_path="conf", config_name="config_eva")
+    pretrained_dict = torch.load(weight_path, map_location=my_device)
+    pretrained_dict_v2 = copy.deepcopy(
+        pretrained_dict
+    )  # v2 has the right para names
+
+    # distributed pretraining can be inferred from the keys' module. prefix
+    head = next(iter(pretrained_dict_v2)).split(".")[
+        0
+    ]  # get head of first key
+    if head == "module":
+        # remove module. prefix from dict keys
+        pretrained_dict_v2 = {
+            k.partition("module.")[2]: pretrained_dict_v2[k]
+            for k in pretrained_dict_v2.keys()
+        }
+
+    if hasattr(model, "module"):
+        model_dict = model.module.resnet.state_dict()
+        multi_gpu_ft = True
+    else:
+        model_dict = model.resnet.state_dict()
+        multi_gpu_ft = False
+
+    # 1. filter out unnecessary keys such as the final linear layers
+    #    we don't want linear layer weights either
+    pretrained_dict = {
+        k: v
+        for k, v in pretrained_dict_v2.items()
+        if k in model_dict and k.split(".")[0] != "classifier"
+    }
+
+    # 2. overwrite entries in the existing state dict
+    model_dict.update(pretrained_dict)
+
+    # 3. load the new state dict
+    if multi_gpu_ft:
+        model.module.resnet.load_state_dict(model_dict)
+    else:
+        model.resnet.load_state_dict(model_dict)
+    print("%d Weights loaded" % len(pretrained_dict))
+
+
+@hydra.main(version_base=None, config_path="conf", config_name="config_eva")
 def main(cfg):
     """Evaluate hand-crafted vs deep-learned features"""
 
@@ -674,12 +752,21 @@ def main(cfg):
     logger.setLevel(logging.INFO)
     now = datetime.now()
     dt_string = now.strftime("%d-%m-%Y_%H:%M:%S")
-    log_dir = os.path.join(
-        get_original_cwd(),
-        cfg.evaluation.evaluation_name + "_" + dt_string + ".log",
-    )
-    cfg.model_path = os.path.join(get_original_cwd(), dt_string + "tmp.pt")
-    fh = logging.FileHandler(log_dir)
+    log_dir = os.path.join(get_original_cwd() + cfg.logging_path)
+    pathlib.Path(log_dir).mkdir(parents=True, exist_ok=True)
+    log_dir = os.path.join(log_dir,
+                           cfg.evaluation.evaluation_name + "_" + dt_string + ".log")
+    
+    cfg.model_path = os.path.join(get_original_cwd() + cfg.model_path)
+    pathlib.Path(cfg.model_path).mkdir(parents=True, exist_ok=True)
+    cfg.model_path = os.path.join(cfg.model_path, dt_string + "tmp.pt")
+
+    cfg.report_path = os.path.join(get_original_cwd() + cfg.report_root)
+    pathlib.Path(cfg.report_path).mkdir(parents=True, exist_ok=True)
+    cfg.report_path = os.path.join(cfg.report_path,
+                                   cfg.evaluation.evaluation_name + "_" + dt_string + ".csv")
+    
+    fh = logging.FileHandler(str(log_dir))
     fh.setLevel(logging.INFO)
     logger.addHandler(fh)
 
@@ -687,6 +774,8 @@ def main(cfg):
     # For reproducibility
     np.random.seed(42)
     torch.manual_seed(42)
+
+    print(cfg.model_path)
     print(cfg.report_path)
     # ----------------------------
     #
@@ -695,9 +784,9 @@ def main(cfg):
     # ----------------------------
 
     # Load dataset
-    X = np.load(cfg.data.X_path)
-    Y = np.load(cfg.data.Y_path)
-    P = np.load(cfg.data.PID_path)  # participant IDs
+    X = np.load(get_original_cwd() + cfg.data.X_path)
+    Y = np.load(get_original_cwd() + cfg.data.Y_path)
+    P = np.load(get_original_cwd() + cfg.data.PID_path)  # participant IDs
 
     sample_rate = cfg.data.sample_rate
     task_type = cfg.data.task_type
@@ -706,8 +795,11 @@ def main(cfg):
         my_device = "cuda:" + str(GPU)
     elif cfg.multi_gpu is True:
         my_device = "cuda:0"  # use the first GPU as master
+    elif torch.backends.mps.is_available():
+        my_device = "mps"
     else:
         my_device = "cpu"
+    print("Using device:", my_device)
     # Expected shape of downstream X and Y
     # X: T x (Sample Rate*Epoch len) x 3
     # Y: T,
@@ -803,7 +895,7 @@ def main(cfg):
         # Original X shape: (1861541, 1000, 3) for capture24
         print("Original X shape:", X.shape)
 
-        input_size = cfg.evaluation.input_size
+        """input_size = cfg.evaluation.input_size
         if X.shape[1] == input_size:
             print("No need to downsample")
             X_downsampled = X
@@ -814,10 +906,10 @@ def main(cfg):
         )  # PyTorch defaults to float32
         # channels first: (N,M,3) -> (N,3,M). PyTorch uses channel first format
         X_downsampled = np.transpose(X_downsampled, (0, 2, 1))
-        print("X transformed shape:", X_downsampled.shape)
+        print("X transformed shape:", X_downsampled.shape)"""
 
         print("Train-test Flip_net+MLP...")
-        evaluate_mlp(X_downsampled, Y, cfg, my_device, logger, groups=P)
+        evaluate_mlp(X, Y, cfg, my_device, logger, groups=P)
 
 
 if __name__ == "__main__":

@@ -1,14 +1,14 @@
-data_root: "to_specify"
+data_root: /data/downstream/EASE_30Hz_0.4w_0.2s
 X_path: "${data.data_root}/X.npy"
 Y_path:  "${data.data_root}/Y.npy"
 PID_path:  "${data.data_root}/pid.npy"
 sample_rate: 30
 task_type: 'classify'
-dataset_name: 'custom'
+dataset_name: 'EASE'
 subject_count: -1
 ratio2keep: 1
 weighted_sample: true
 batch_size: 50
 held_one_subject_out: true
-output_size: 5
+output_size: 4
 weighted_loss_fn: true

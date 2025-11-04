@@ -938,3 +938,141 @@ class EncoderMLP(nn.Module):
         feats = self.encoder(x)
         y = self.classifier(feats.view(x.shape[0], -1))
         return y
+
+
+
+class MultiIMUFusion(nn.Module):
+    def __init__(self, num_sensors=4, class_num=4, L=12):
+        super().__init__()
+        self.num_sensors = num_sensors
+        # 1) Shared HarNet trunk (expects [B,3,L])
+        self.resnet = Resnet(output_size=class_num, n_channels=3, epoch_len=5, is_eva=True)
+        # If you're on short windows, patch strides as we discussed:
+        self.resnet = patch_for_short_windows(self.resnet, L=L)
+
+        self.fe = self.resnet.feature_extractor   # -> [B, 1024, T’]; GAP is done below
+        self.gap = nn.AdaptiveAvgPool1d(1)
+
+        # 2) Sensor-ID embedding (helps the gate know which IMU it is)
+        self.id_emb = nn.Embedding(num_sensors, 16)
+
+        # 3) Attention/gating over sensors
+        self.gate = nn.Sequential(
+            nn.Linear(512 + 16 + 1, 128), nn.GELU(),
+            nn.Linear(128, 1)  # scalar weight per sensor
+        )
+
+        # 4) Final classifier on fused feature
+        self.cls = self.resnet.classifier  # nn.Linear(1024, class_num)
+
+        # (optional) per-sensor auxiliary heads
+        self.aux = nn.Linear(512, class_num)
+
+    def forward(self, X, sensor_ids=None, sensor_dropout_p=0.3, train_mode=True):
+        """
+        xs: list/tuple of length S (num_sensors); each is [B,3,L]
+        sensor_ids: list/tuple of ints (0..S-1) or None
+        """
+        # reshape X to (self.num_sensors, batch_size, 3, epoch_len)
+        B, C, L = X.shape
+        S = self.num_sensors
+        xs = X.reshape(B, S, C // S, L)
+
+        xs = [xs[:, s, :, :] for s in range(S)]
+        feats, aux_logits, gates = [], [], []
+        for s in range(S):
+            x = xs[s]                                         # [B,3,L]
+            f = self.gap(self.fe(x)).squeeze(-1)              # [B,1024]
+            # movement energy feature helps gate down idle/noisy streams
+            energy = torch.sqrt(x.pow(2).mean(dim=(1,2)) + 1e-9).unsqueeze(1)    # [B,1]
+            idv = self.id_emb(torch.full((B,), s, device=x.device)) if sensor_ids is None \
+                  else self.id_emb(torch.full((B,), sensor_ids[s], device=x.device))
+            gate_in = torch.cat([f, idv, energy], dim=1)      # [B,1024+16+1]
+            g = self.gate(gate_in).squeeze(1)                 # [B]
+
+            # sensor dropout during training
+            if train_mode and sensor_dropout_p > 0:
+                mask = (torch.rand(B, device=x.device) > sensor_dropout_p).float()
+                g = g * mask + (-1e9) * (1 - mask)            # -inf gate if dropped
+
+            feats.append(f); gates.append(g); aux_logits.append(self.aux(f))
+
+        G = torch.stack(gates, dim=1)                         # [B,S]
+        W = torch.softmax(G, dim=1).unsqueeze(-1)             # [B,S,1]
+        F = torch.stack(feats, dim=1)                         # [B,S,1024]
+        F_fused = (W * F).sum(dim=1)                          # [B,1024]
+        logits = self.cls(F_fused)                            # [B,C]
+        return logits, aux_logits  # aux_logits is list length S (each [B,C])
+    
+
+from types import MethodType
+
+def _get_layers(fe):
+    # your printout shows layer1..layer5 inside feature_extractor
+    return [fe.layer1, fe.layer2, fe.layer3, fe.layer4, fe.layer5]
+
+def _find_ds_name(layer):
+    # find the Downsample() module name inside a Sequential layer
+    for name, m in layer.named_children():
+        if m.__class__.__name__ == "Downsample":
+            return name
+    return None
+
+def _plan_downsamples(L, n_layers=5, min_len_for_conv=3):
+    """
+    Greedy rule: keep a downsample at layer i only if the *next* layer's conv
+    would still see length >= 3 after halving. Always OK to keep the very last
+    downsample (no convs after it).
+    """
+    keep = [False]*n_layers
+    cur = L
+    for i in range(n_layers):
+        if cur < min_len_for_conv:
+            raise ValueError(f"Input too short for conv at layer{i+1}: {cur} < {min_len_for_conv}")
+        if i < n_layers - 1:
+            # keep DS if halving still leaves enough length for the next conv
+            if (cur // 2) >= min_len_for_conv:
+                keep[i] = True
+                cur = cur // 2
+            else:
+                keep[i] = False
+                # cur stays
+        else:
+            # last layer: safe to keep (no conv after)
+            keep[i] = True
+            cur = max(1, cur // 2)
+    return keep  # e.g., for L=12 -> [True, True, False, False, True]
+
+def patch_for_short_windows(net: nn.Module, L: int) -> nn.Module:
+    fe = net.feature_extractor
+    layers = _get_layers(fe)
+    keep = _plan_downsamples(L, n_layers=len(layers), min_len_for_conv=3)
+
+    # replace unwanted Downsample() with Identity
+    for i, layer in enumerate(layers):
+        ds_name = _find_ds_name(layer)
+        if ds_name is None:
+            continue
+        if not keep[i]:
+            setattr(layer, ds_name, nn.Identity())
+
+    """# always pool to a single time-step before classifier (in case T'>1)
+    net.gap = nn.AdaptiveAvgPool1d(1)
+
+    old_forward = net.forward
+    def forward_patched(self, x):
+        f = self.feature_extractor(x)         # [B, C, T']
+        if f.ndim == 3 and f.shape[-1] != 1:
+            f = self.gap(f)                   # [B, C, 1]
+        f = f.squeeze(-1)                     # [B, C]
+        return self.classifier(f)             # [B, num_classes]
+    net.forward = MethodType(forward_patched, net)
+
+    # quick smoke test
+    with torch.no_grad():
+        _ = net(torch.randn(2, cfg.num_sensors, 3, cfg.L).to(device))"""
+
+    # (Optional) print which DS kept
+    kept_layers = [i+1 for i, k in enumerate(keep) if k]
+    print(f"[patch] L={L}: kept Downsample at layers {kept_layers}, others disabled.")
+    return net
