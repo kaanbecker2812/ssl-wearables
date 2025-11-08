@@ -62,5 +62,6 @@ python downstream_task_evaluation.py \
   report_path="${OUTDIR}/reports" \
   evaluation.flip_net_path="${CODE}/model_check_point/mtl_5_best.mdl" \
   data.data_root="${DATA}/EASE_30Hz_0.4w_0.2s" \
+  evaluation.num_epochs=50 \
 
 echo "Done: $(date)"
