@@ -25,11 +25,12 @@ OUTDIR="${CODE}/experiments/${SLURM_JOB_NAME}_${SLURM_JOB_ID}"
 mkdir -p "${OUTDIR}"/{models,logs,reports}
 echo "OUTDIR: ${OUTDIR}"
 
-# Optional: put user-site binaries (pip --user) on PATH
-export PATH="/root/.local/bin:$PATH"
+# Optional: put user-site binaries (pip --user) on PATH (both container + host)
+export PATH="/root/.local/bin:${HOMEHOST}/.local/bin:$PATH"
 
-# Make pip cache persistent across jobs
-export PIP_CACHE_DIR="${HOMEHOST}/.cache/pip"
+# Use fast local scratch for tmp/cache if SLURM provides it
+export TMPDIR="${SLURM_TMPDIR:-/tmp}"
+export PIP_CACHE_DIR="${TMPDIR}/pip-cache"
 mkdir -p "${PIP_CACHE_DIR}"
 
 # Limit BLAS threads to the CPUs you asked for
@@ -38,18 +39,26 @@ export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 export HYDRA_FULL_ERROR=1
 export MPLCONFIGDIR="${OUTDIR}/.mpl"
 
+# ---------------- Python environment ----------------
+VENV_DIR="${OUTDIR}/.venv"
+python -m venv "${VENV_DIR}"
+# shellcheck disable=SC1090
+source "${VENV_DIR}/bin/activate"
+PYTHON_BIN="${VENV_DIR}/bin/python"
+PIP_BIN="${VENV_DIR}/bin/pip"
+
 # ---------------- repo-specific knobs (EDIT as needed) ----------------
-REQS_FILE="${CODE}/req.txt"         # where requirements.txt lives
+REQS_FILE="${CODE}/req.txt"         # where requirements live
 
 python -V || true
 nvcc --version 2>/dev/null || true
 nvidia-smi || true
 
-# ---------------- install requirements into the container ----------------
+# ---------------- install requirements into the venv ----------------
 echo "Installing requirements from: ${REQS_FILE}"
-python -m pip install --upgrade pip wheel setuptools --user
+${PIP_BIN} install --upgrade pip wheel setuptools
 if [ -f "${REQS_FILE}" ]; then
-  python -m pip install --user -r "${REQS_FILE}"
+  ${PIP_BIN} install -r "${REQS_FILE}"
 else
   echo "WARNING: ${REQS_FILE} not found. Skipping 'pip install -r'."
 fi
@@ -57,7 +66,7 @@ fi
 # ---------------- run the downstream evaluation ----------------
 
 echo "Launching downstream_task_evaluation.py ..."
-python downstream_task_evaluation.py \
+${PYTHON_BIN} downstream_task_evaluation.py \
   root="${CODE}" \
   model_path="${OUTDIR}/models" \
   logging_path="${OUTDIR}/logs" \
