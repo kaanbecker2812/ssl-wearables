@@ -9,6 +9,7 @@
 #SBATCH -e /dss/dsshome1/06/ge38qav/Pretrained_Models/slurm/%x_%j.err
 
 # ----- Container settings (LRZ) -----
+#SBATCH --export=ALL,ENROOT_CACHE_PATH=/tmp/ge38qav/enroot-cache,ENROOT_DATA_PATH=/tmp/ge38qav/enroot-data,ENROOT_RUNTIME_PATH=/tmp/ge38qav/enroot-runtime
 #SBATCH --container-image="nvcr.io#nvidia/pytorch:23.07-py3"
 #SBATCH --container-mounts="/dss/dsshome1/06/ge38qav/Pretrained_Models/ssl-wearables:/workspace,/dss/dsshome1/06/ge38qav/Pretrained_Models/ssl-wearables/data/downstream:/data,/dss/dsshome1/06/ge38qav:/hosthome"
 
@@ -32,11 +33,7 @@ export PATH="/root/.local/bin:$PATH"
 export PIP_CACHE_DIR="${HOMEHOST}/.cache/pip"
 mkdir -p "${PIP_CACHE_DIR}"
 
-# Limit BLAS threads to the CPUs you asked for
-export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
-export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 export HYDRA_FULL_ERROR=1
-export MPLCONFIGDIR="${OUTDIR}/.mpl"
 
 echo "Python & CUDA in container:"
 python -V || true
