@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -J finetune_harnet
-#SBATCH -p test-v100x2
+#SBATCH -p lrz-dgx-1-p100x8
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=256G
@@ -10,7 +10,7 @@
 
 # ----- Container settings (LRZ) -----
 #SBATCH --container-image="nvcr.io#nvidia/pytorch:23.07-py3"
-#SBATCH --container-mounts="/dss/dsshome1/06/ge38qav/Pretrained_Models/ssl_wearables:/workspace,/dss/dsshome1/06/ge38qav/Pretrained_Models/ssl_wearables/data/downstream:/data,/dss/dsshome1/06/ge38qav:/hosthome"
+#SBATCH --container-mounts="/dss/dsshome1/06/ge38qav/Pretrained_Models/ssl-wearables:/workspace,/dss/dsshome1/06/ge38qav/Pretrained_Models/ssl-wearables/data/downstream:/data,/dss/dsshome1/06/ge38qav:/hosthome"
 
 set -euo pipefail
 echo "Node: $(hostname) | GPU(s): ${CUDA_VISIBLE_DEVICES:-N/A} | Start: $(date)"
