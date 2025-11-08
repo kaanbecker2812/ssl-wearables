@@ -25,21 +25,12 @@ OUTDIR="${HOMEHOST}/Pretrained_Models/experiments/${SLURM_JOB_NAME}_${SLURM_JOB_
 mkdir -p "${OUTDIR}"/{models,logs,reports}
 echo "OUTDIR: ${OUTDIR}"
 
-# Optional: put user-site binaries (pip --user) on PATH (both container + host)
-export PATH="/root/.local/bin:${HOMEHOST}/.local/bin:$PATH"
+# Optional: put user-site binaries (pip --user) on PATH
+export PATH="/root/.local/bin:$PATH"
 
-# Use fast local scratch for tmp/cache if SLURM provides it
-export TMPDIR="${SLURM_TMPDIR:-/tmp}"
-export PIP_CACHE_DIR="${TMPDIR}/pip-cache"
+# Make pip cache persistent across jobs
+export PIP_CACHE_DIR="${HOMEHOST}/.cache/pip"
 mkdir -p "${PIP_CACHE_DIR}"
-
-# Keep pip installs inside the job directory instead of $HOME
-PYUSERBASE="${OUTDIR}/.pyuser"
-mkdir -p "${PYUSERBASE}"
-export PYTHONUSERBASE="${PYUSERBASE}"
-export PATH="${PYUSERBASE}/bin:${PATH}"
-PYVER="$(python -c 'import sys; print(f\"{sys.version_info.major}.{sys.version_info.minor}\")')"
-export PYTHONPATH="${PYUSERBASE}/lib/python${PYVER}/site-packages:${PYTHONPATH:-}"
 
 # Limit BLAS threads to the CPUs you asked for
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
@@ -47,14 +38,12 @@ export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 export HYDRA_FULL_ERROR=1
 export MPLCONFIGDIR="${OUTDIR}/.mpl"
 
-# ---------------- repo-specific knobs (EDIT as needed) ----------------
-REQS_FILE="${CODE}/req.txt"         # where requirements live
-
+echo "Python & CUDA in container:"
 python -V || true
 nvcc --version 2>/dev/null || true
 nvidia-smi || true
 
-# ---------------- install requirements ----------------
+# ---------------- install requirements into the container ----------------
 echo "Installing requirements from: ${REQS_FILE}"
 python -m pip install --upgrade pip wheel setuptools --user
 if [ -f "${REQS_FILE}" ]; then
