@@ -11,12 +11,6 @@
 set -euo pipefail
 echo "Node: $(hostname) | GPU(s): ${CUDA_VISIBLE_DEVICES:-N/A} | Start: $(date)"
 
-# ---------- Modules (adjust to your LRZ setup) ----------
-module purge
-module load cuda/12.1 2>/dev/null || true
-module load python/3.10 2>/dev/null || true
-nvidia-smi || true
-
 # ---------- Paths (edit these to your layout) ----------
 CODE="$HOME/Pretrained_Models/ssl-wearables"           # cloned repo
 VENV_DIR="$HOME/.venvs/harnet"                              # venv location in HOME
@@ -34,23 +28,29 @@ export MKL_NUM_THREADS=${SLURM_CPUS_PER_TASK:-8}
 export HYDRA_FULL_ERROR=1
 
 # ---------- Create/activate venv ----------
+PYBIN="${PYBIN:-python3}"   # use system python3
+$PYBIN -V
 if [ ! -d "$VENV_DIR" ]; then
-  echo "[venv] Creating venv at $VENV_DIR"
-  python -m venv "$VENV_DIR"
+  echo "[venv] Creating at $VENV_DIR"
+  $PYBIN -m venv "$VENV_DIR"
 fi
 source "$VENV_DIR/bin/activate"
 python -V
 which python
 
+python -m pip install --upgrade pip wheel setuptools --no-cache-dir
+
 # ---------- Install requirements (no cache to save HOME quota) ----------
 if [ -f "$REQS_FILE" ]; then
-  echo "[pip] Installing requirements from $REQS_FILE"
-  python -m pip install --upgrade pip wheel setuptools --no-cache-dir
-  # NOTE: if compute nodes have no internet, run this once on a login node instead.
+  echo "[pip] Installing repo requirements from $REQS_FILE"
   python -m pip install --no-cache-dir -r "$REQS_FILE"
 else
-  echo "[warn] $REQS_FILE not found. Skipping pip install."
+  echo "[warn] $REQS_FILE not found; continuing."
 fi
+
+nvidia-smi || true
+python -c "import torch; print('torch:', torch.__version__, 'CUDA:', torch.version.cuda, 'GPU:', torch.cuda.is_available())"
+
 # ---------------- run the downstream evaluation ----------------
 
 echo "Launching downstream_task_evaluation.py ..."
