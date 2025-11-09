@@ -218,7 +218,7 @@ def train_mlp(model, train_loader, val_loader, cfg, my_device, weights):
     )
     for epoch in range(cfg.evaluation.num_epoch):
         t0 = datetime.now()
-        if epoch == 5:
+        if epoch == 10:
             # unfreeze weights
             freeze_weights(model, unfreeze=True)
         model.train()
@@ -798,8 +798,6 @@ def main(cfg):
     # Expected shape of downstream X and Y
     # X: T x (Sample Rate*Epoch len) x 3
     # Y: T,
-    print("X shape:", X.shape)
-    print("Y shape:", Y.shape)
     if task_type == "classify":
         print("\nLabel distribution:")
         print(pd.Series(Y).value_counts())
