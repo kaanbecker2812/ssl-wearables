@@ -17,10 +17,9 @@ VENV_DIR="$HOME/.venvs/harnet"                              # venv location in H
 REQS_FILE="$CODE/req.txt"
 OUTDIR="$HOME/Pretrained_Models/experiments/${SLURM_JOB_NAME}_${SLURM_JOB_ID}"  # output dir for models/logs/reports
 
-DATA_ROOT="$HOME/Pretrained_Models/ssl-wearables/data/downstream"                                      # folder with your X.npy/Y.npy/pid.npy
+DATA="$HOME/Pretrained_Models/ssl-wearables/data/downstream"                                      # folder with your X.npy/Y.npy/pid.npy
 
 mkdir -p "${OUTDIR}"/{models,logs,reports}
-mkdir -p "$HOME/.venvs"
 
 # Keep BLAS threads in check
 export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-8}
@@ -28,45 +27,12 @@ export MKL_NUM_THREADS=${SLURM_CPUS_PER_TASK:-8}
 export HYDRA_FULL_ERROR=1
 export PATH="$HOME/.local/bin:$PATH"   # user-site scripts (pip, virtualenv, etc.)
 
-# ---------- Create/activate venv ----------
-PYBIN="${PYBIN:-python3}"
-$PYBIN -V || { echo "python3 not found"; exit 1; }
-
-# --- Ensure we have pip (system Python may lack it) ---
-if ! $PYBIN -m pip --version >/dev/null 2>&1; then
-  echo "[bootstrap] pip not found; trying ensurepip..."
-  $PYBIN -m ensurepip --upgrade 2>/dev/null || true
-fi
-if ! $PYBIN -m pip --version >/dev/null 2>&1; then
-  echo "[bootstrap] ensurepip unavailable; using get-pip.py"
-  curl -fsSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
-  $PYBIN /tmp/get-pip.py --user
-  export PATH="$HOME/.local/bin:$PATH"
-fi
-
-# --- Install virtualenv to user site and create venv ---
-$PYBIN -m pip install --user --upgrade virtualenv --no-cache-dir
-if [ ! -d "$VENV_DIR" ]; then
-  echo "[venv] Creating at $VENV_DIR"
-  $PYBIN -m virtualenv "$VENV_DIR" --python="$PYBIN"
-fi
-
 # --- Activate venv ---
 source "$VENV_DIR/bin/activate"
-python -V
-which python
+python -V || { echo 'Python in venv not working'; exit 1; }
 nvidia-smi || true
 
-# --- Install project requirements (no cache to save quota) ---
-if [ -f "$REQS_FILE" ]; then
-  echo "[pip] Installing from $REQS_FILE"
-  python -m pip install --upgrade pip wheel setuptools --no-cache-dir
-  python -m pip install --no-cache-dir -r "$REQS_FILE"
-else
-  echo "[warn] $REQS_FILE not found; skipping."
-fi
 # ---------------- run the downstream evaluation ----------------
-
 echo "Launching downstream_task_evaluation.py ..."
 python downstream_task_evaluation.py \
   root="${CODE}" \
