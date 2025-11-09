@@ -26,31 +26,45 @@ mkdir -p "$HOME/.venvs"
 export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-8}
 export MKL_NUM_THREADS=${SLURM_CPUS_PER_TASK:-8}
 export HYDRA_FULL_ERROR=1
+export PATH="$HOME/.local/bin:$PATH"   # user-site scripts (pip, virtualenv, etc.)
 
 # ---------- Create/activate venv ----------
-PYBIN="${PYBIN:-python3}"   # use system python3
-$PYBIN -V
+PYBIN="${PYBIN:-python3}"
+$PYBIN -V || { echo "python3 not found"; exit 1; }
+
+# --- Ensure we have pip (system Python may lack it) ---
+if ! $PYBIN -m pip --version >/dev/null 2>&1; then
+  echo "[bootstrap] pip not found; trying ensurepip..."
+  $PYBIN -m ensurepip --upgrade 2>/dev/null || true
+fi
+if ! $PYBIN -m pip --version >/dev/null 2>&1; then
+  echo "[bootstrap] ensurepip unavailable; using get-pip.py"
+  curl -fsSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+  $PYBIN /tmp/get-pip.py --user
+  export PATH="$HOME/.local/bin:$PATH"
+fi
+
+# --- Install virtualenv to user site and create venv ---
+$PYBIN -m pip install --user --upgrade virtualenv --no-cache-dir
 if [ ! -d "$VENV_DIR" ]; then
   echo "[venv] Creating at $VENV_DIR"
-  $PYBIN -m venv "$VENV_DIR"
+  $PYBIN -m virtualenv "$VENV_DIR" --python="$PYBIN"
 fi
+
+# --- Activate venv ---
 source "$VENV_DIR/bin/activate"
 python -V
 which python
+nvidia-smi || true
 
-python -m pip install --upgrade pip wheel setuptools --no-cache-dir
-
-# ---------- Install requirements (no cache to save HOME quota) ----------
+# --- Install project requirements (no cache to save quota) ---
 if [ -f "$REQS_FILE" ]; then
-  echo "[pip] Installing repo requirements from $REQS_FILE"
+  echo "[pip] Installing from $REQS_FILE"
+  python -m pip install --upgrade pip wheel setuptools --no-cache-dir
   python -m pip install --no-cache-dir -r "$REQS_FILE"
 else
-  echo "[warn] $REQS_FILE not found; continuing."
+  echo "[warn] $REQS_FILE not found; skipping."
 fi
-
-nvidia-smi || true
-python -c "import torch; print('torch:', torch.__version__, 'CUDA:', torch.version.cuda, 'GPU:', torch.cuda.is_available())"
-
 # ---------------- run the downstream evaluation ----------------
 
 echo "Launching downstream_task_evaluation.py ..."
