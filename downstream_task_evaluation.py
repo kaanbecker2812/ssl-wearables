@@ -786,15 +786,14 @@ def main(cfg):
 
     sample_rate = cfg.data.sample_rate
     task_type = cfg.data.task_type
-    GPU = cfg.gpu
-    if GPU != -1:
-        my_device = "cuda:" + str(GPU)
+    if torch.cuda.is_available():
+        my_device = torch.device("cuda")
     elif cfg.multi_gpu is True:
-        my_device = "cuda:0"  # use the first GPU as master
+        my_device = torch.device("cuda:0")  # use the first GPU as master
     elif torch.backends.mps.is_available():
-        my_device = "mps"
+        my_device = torch.device("mps")
     else:
-        my_device = "cpu"
+        my_device = torch.device("cpu")
     print("Using device:", my_device)
     # Expected shape of downstream X and Y
     # X: T x (Sample Rate*Epoch len) x 3

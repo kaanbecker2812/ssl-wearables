@@ -5,7 +5,7 @@ defaults:
   - model: resnet
   - dataloader: five_sec
 
-gpu: -1
+gpu: 0
 gpu_ids: [0, 1, 2]  # gpus to use if multi_gpu==true
 multi_gpu: false
 num_split: 5
