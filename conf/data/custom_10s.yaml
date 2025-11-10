@@ -9,6 +9,6 @@ subject_count: -1
 ratio2keep: 1
 weighted_sample: true
 batch_size: 50
-held_one_subject_out: false
+held_one_subject_out: true
 output_size: 4
 weighted_loss_fn: true
