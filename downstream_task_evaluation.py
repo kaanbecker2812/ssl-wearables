@@ -323,7 +323,7 @@ def init_model(cfg, my_device):
     if cfg.multi_gpu:
         model = nn.DataParallel(model, device_ids=cfg.gpu_ids)
 
-    print(model)
+    #print(model)
     model.to(my_device, dtype=torch.float)
     return model
 
@@ -370,7 +370,6 @@ def train_test_mlp(
     encoder=None,
 ):
     model = setup_model(cfg, my_device)
-    #model = patch_for_short_windows(model, cfg=cfg, device=my_device)
     if cfg.is_verbose:
         print(model)
     train_loader, val_loader, test_loader, weights = setup_data(
@@ -379,7 +378,6 @@ def train_test_mlp(
     train_mlp(model, train_loader, val_loader, cfg, my_device, weights)
 
     model = init_model(cfg, my_device)
-    #model = patch_for_short_windows(model, cfg=cfg, device=my_device)
 
     model.load_state_dict(torch.load(cfg.model_path))
 
