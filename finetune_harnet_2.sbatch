@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -J ease_dss
+#SBATCH -J ease_harnet
 #SBATCH -p lrz-dgx-1-p100x8          # adjust to your GPU partition
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
@@ -15,7 +15,7 @@ echo "Node: $(hostname) | GPU(s): ${CUDA_VISIBLE_DEVICES:-N/A} | Start: $(date)"
 CODE="$HOME/Pretrained_Models/ssl-wearables"           # cloned repo
 VENV_DIR="$HOME/.venvs/harnet"                              # venv location in HOME
 REQS_FILE="$CODE/req.txt"
-OUTDIR="$HOME/Pretrained_Models/experiments/${SLURM_JOB_NAME}_${SLURM_JOB_ID}"  # output dir for models/logs/reports
+OUTDIR="$HOME/Pretrained_Models/experiments_harnet/${SLURM_JOB_NAME}_${SLURM_JOB_ID}"  # output dir for models/logs/reports
 
 DATA="$HOME/Pretrained_Models/ssl-wearables/data/downstream"                                      # folder with your X.npy/Y.npy/pid.npy
 
@@ -32,6 +32,14 @@ source "$VENV_DIR/bin/activate"
 python -V || { echo 'Python in venv not working'; exit 1; }
 nvidia-smi || true
 
+# create new dataset with desired window/hop length
+echo "Creating EASE dataset with 1000Hz, 0.120s window, 0.090s hop ..."
+DATA=$(python make_EASE.py \
+  --datafiles '/dss/dsshome1/06/ge38qav/DATA/raw/labeled/full*.csv' \
+  --target_fs 1000 \
+  --win_sec 0.120 \
+  --hop_sec 0.090
+)
 # ---------------- run the downstream evaluation ----------------
 echo "Launching downstream_task_evaluation.py ..."
 python downstream_task_evaluation.py \
@@ -40,7 +48,7 @@ python downstream_task_evaluation.py \
   logging_path="${OUTDIR}/logs" \
   report_path="${OUTDIR}/reports" \
   evaluation.flip_net_path="${CODE}/model_check_point/mtl_5_best.mdl" \
-  data.data_root="${DATA}/EASE_30Hz_0.4w_0.2s" \
+  data.data_root="${DATA}" \
   evaluation.num_epoch=50 \
 
 echo "Done: $(date)"

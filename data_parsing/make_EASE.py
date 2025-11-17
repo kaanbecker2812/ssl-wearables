@@ -11,11 +11,12 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 import os
 import pathlib
 
-TARGET_FS = 30
-WIN_SEC   = 0.4   # window length
-HOP_SEC   = 0.2  # 50% overlap
-WIN_SAMP  = int(round(WIN_SEC * TARGET_FS))  # 12
-HOP_SAMP_FLOAT = HOP_SEC * TARGET_FS         # 6.0
+DATAFILES = '/Users/kaanbecker/Documents/VSCode/EASE_pretrained_models/ssl_wearables/ssl-wearables/raw_data/labeled/full*.csv'
+TARGET_FS = 1000
+WIN_SEC   = 0.120   # window length
+HOP_SEC   = 0.090  # 50% overlap
+WIN_SAMP  = int(round(WIN_SEC * TARGET_FS))  # 120
+HOP_SAMP_FLOAT = HOP_SEC * TARGET_FS         # 90.0
 IMUS_ACC = ['Sig_IMU_RL_Acc_', 'Sig_IMU_LL_Acc_', 
             'Sig_IMU_LU_Acc_', 'Sig_IMU_RU_Acc_',
             'Sig_IMU_Back_Acc_']
@@ -63,7 +64,7 @@ def cut_force_peaks(df, force_peak_label=9, active_labels=[1,2,3]):
     cut_start = max(peaks_before) + 1 if peaks_before else 0
     cut_end = min(peaks_after) if peaks_after else len(df)
 
-    return df.loc[cut_start:cut_end]
+    return df.iloc[cut_start:cut_end]
 
 
 def make_windows(ax, ay, az, labels, fs_raw, pid, units="ms2"):
@@ -200,7 +201,7 @@ def plot_Z_with_raw_and_window_labels(
                       extent=[t_raw[0], t_raw[-1], 0, 1],
                       cmap=cmap, norm=norm, interpolation="nearest")
         ax_raw.set_yticks([])
-        ax_raw.set_ylabel("Original\nlabels", rotation=0, labelpad=40, va='center')
+        ax_raw.set_ylabel(f"Original\nlabels\nsamples: {N}", rotation=0, labelpad=40, va='center')
         if rows == 2:
             ax_raw.set_xlabel("Time (s)")
         else:
@@ -215,7 +216,7 @@ def plot_Z_with_raw_and_window_labels(
                       extent=[t_raw[0], t_raw[-1], 0, 1],
                       cmap=cmap, norm=norm, interpolation="nearest")
         ax_win.set_yticks([])
-        ax_win.set_ylabel("Window\nlabels", rotation=0, labelpad=40, va='center')
+        ax_win.set_ylabel(f"Window\nlabels\nsamples: {len(labels_win)}", rotation=0, labelpad=40, va='center')
         ax_win.set_xlabel("Time (s)")
 
     plt.tight_layout()
@@ -230,7 +231,9 @@ def convert_trials(root_folder, save_root='data/downstream/EASE_1000Hz_120w_25s'
         if 9 in data['labels'].values:
             print(f"Warning: Found '9' labels in {datafile} for {imu_acc}, removing those windows.")
         data = cut_force_peaks(data, force_peak_label=9, active_labels=[1,2,3])
-        X_all= []
+        assert not data['labels'].isna().any(), f"NaN labels found in {datafile}!"
+        assert data['labels'].unique().max() != 9, f"'9' labels still present in {datafile} after cutting!"
+        X_all = []
         y_old = None
         for imu_acc in IMUS_ACC:
             # special case: LL missing in some trials
@@ -250,6 +253,7 @@ def convert_trials(root_folder, save_root='data/downstream/EASE_1000Hz_120w_25s'
         PID_trial.append(PID)
 
         if plot:
+            print(f'Number of windows per class: {np.unique(Y, return_counts=True)}')
             fig = plot_Z_with_raw_and_window_labels(
                                                     data, z_col="Z",
                                                     labels_raw=data['labels'],
@@ -270,8 +274,9 @@ def convert_trials(root_folder, save_root='data/downstream/EASE_1000Hz_120w_25s'
     np.save(f"{save_root}/Y.npy", Y)
     np.save(f"{save_root}/pid.npy", pid)
     print("Saved:", X.shape, Y.shape, pid.shape)
+    return save_root
 
-
-DATAFILES = '/Users/kaanbecker/Documents/VSCode/EASE_pretrained_models/ssl_wearables/ssl-wearables/raw_data/labeled/full*.csv'
-save_root=f'data/downstream/EASE_{TARGET_FS}Hz_{WIN_SEC}w_{HOP_SEC}s'
-convert_trials(root_folder=DATAFILES, save_root=save_root, plot=False)
+if __name__ == "__main__":
+    save_root=f'data/downstream/EASE_{TARGET_FS}Hz_{WIN_SEC}w_{HOP_SEC}s'
+    out_dir = convert_trials(root_folder=DATAFILES, save_root=save_root, plot=False)
+    print("Data written to:", out_dir)
