@@ -226,10 +226,10 @@ def plot_Z_with_raw_and_window_labels(
 # trials = list of dicts: {'ax':..., 'ay':..., 'az':..., 'labels':..., 'fs':..., 'pid':..., 'units': 'ms2' or 'g'}
 def convert_trials(root_folder, save_root='data/downstream/EASE_1000Hz_120w_25s', plot=False):
     X_trial, Y_trial, PID_trial = [], [], []
-    for datafile in tqdm(glob.glob(root_folder)):
+    for datafile in glob.glob(root_folder):
         data = pd.read_csv(datafile) #, index_col='Time')
-        if 9 in data['labels'].values:
-            print(f"Warning: Found '9' labels in {datafile} for {imu_acc}, removing those windows.")
+        #if 9 in data['labels'].values:
+         #   print(f"Warning: Found '9' labels in {datafile} for {imu_acc}, removing those windows.")
         data = cut_force_peaks(data, force_peak_label=9, active_labels=[1,2,3])
         assert not data['labels'].isna().any(), f"NaN labels found in {datafile}!"
         assert data['labels'].unique().max() != 9, f"'9' labels still present in {datafile} after cutting!"
@@ -238,7 +238,7 @@ def convert_trials(root_folder, save_root='data/downstream/EASE_1000Hz_120w_25s'
         for imu_acc in IMUS_ACC:
             # special case: LL missing in some trials
             if f'{imu_acc}y' not in data.columns:
-                print(f"Warning: Missing LL IMU in {datafile}, filling with zeros.")
+                #print(f"Warning: Missing LL IMU in {datafile}, filling with zeros.")
                 data[f'{imu_acc}y'] = 0.0
             X, Y, PID = make_windows(data[f'{imu_acc}x'], data[f'{imu_acc}y'], data[f'{imu_acc}z'],
                                     data['labels'], 1000, datafile.split('/')[-1].split('_')[2],

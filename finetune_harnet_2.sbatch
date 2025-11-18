@@ -43,7 +43,8 @@ DATA=$(python make_EASE.py \
 )
 # ---------------- run the downstream evaluation ----------------
 echo "Launching downstream_task_evaluation.py ..."
-cd "$CODE" || exit 1
+cd "$CODE"
+echo "Data located at: ${DATA}"
 python downstream_task_evaluation.py \
   root="${CODE}" \
   model_path="${OUTDIR}/models" \
