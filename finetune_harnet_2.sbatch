@@ -35,7 +35,7 @@ nvidia-smi || true
 # create new dataset with desired window/hop length
 echo "Creating EASE dataset with 1000Hz, 0.120s window, 0.090s hop ..."
 cd "$CODE/data_parsing" || exit 1
-DATA=$(python make_EASE.py \
+DATA_FOLDER=$(python make_EASE.py \
   --datafiles '/dss/dsshome1/06/ge38qav/DATA/raw/labeled/full*.csv' \
   --target_fs 1000 \
   --win_sec 0.120 \
@@ -44,7 +44,7 @@ DATA=$(python make_EASE.py \
 # ---------------- run the downstream evaluation ----------------
 echo "Launching downstream_task_evaluation.py ..."
 cd "$CODE"
-echo "Data located at: ${DATA}"
+echo "Data located at: ${DATA}/${DATA_FOLDER}"
 python downstream_task_evaluation.py \
   root="${CODE}" \
   model_path="${OUTDIR}/models" \
@@ -52,6 +52,7 @@ python downstream_task_evaluation.py \
   report_path="${OUTDIR}/reports" \
   evaluation.flip_net_path="${CODE}/model_check_point/mtl_5_best.mdl" \
   data.data_root="${DATA}" \
+  data.data_name="${DATA_FOLDER}" \
   evaluation.num_epoch=50 \
 
 echo "Done: $(date)"
