@@ -34,7 +34,7 @@ nvidia-smi || true
 
 # create new dataset with desired window/hop length
 echo "Creating EASE dataset with 1000Hz, 0.120s window, 0.090s hop ..."
-DATA=$(python make_EASE.py \
+DATA=$(python data_parsing.make_EASE.py \
   --datafiles '/dss/dsshome1/06/ge38qav/DATA/raw/labeled/full*.csv' \
   --target_fs 1000 \
   --win_sec 0.120 \
