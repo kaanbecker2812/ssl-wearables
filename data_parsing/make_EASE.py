@@ -11,7 +11,7 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 import os
 import pathlib
 
-DATAFILES = '/Users/kaanbecker/Documents/VSCode/EASE_pretrained_models/ssl_wearables/ssl-wearables/raw_data/labeled/full*.csv'
+DATAFILES = '/dss/dsshome1/06/ge38qav/DATA/raw/labeled/full*.csv' #'/Users/kaanbecker/Documents/VSCode/EASE_pretrained_models/DATA/raw/labeled_copy/full*.csv'
 TARGET_FS = 1000
 WIN_SEC   = 0.120   # window length
 HOP_SEC   = 0.090  # 50% overlap
@@ -227,7 +227,7 @@ def plot_Z_with_raw_and_window_labels(
 def convert_trials(root_folder, save_root='data/downstream/EASE_1000Hz_120w_25s', plot=False):
     X_trial, Y_trial, PID_trial = [], [], []
     for datafile in tqdm(glob.glob(root_folder)):
-        data = pd.read_csv(datafile, index_col='Time')
+        data = pd.read_csv(datafile) #, index_col='Time')
         if 9 in data['labels'].values:
             print(f"Warning: Found '9' labels in {datafile} for {imu_acc}, removing those windows.")
         data = cut_force_peaks(data, force_peak_label=9, active_labels=[1,2,3])
