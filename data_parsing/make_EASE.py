@@ -274,8 +274,8 @@ def convert_trials(root_folder, save_root='data/downstream/EASE_1000Hz_120w_25s'
     np.save(f"{save_root}/Y.npy", Y)
     np.save(f"{save_root}/pid.npy", pid)
     print("Saved:", X.shape, Y.shape, pid.shape)
-    return save_root.split('/')[-1]
+    print(save_root.split('/')[-1])
 
 if __name__ == "__main__":
     save_root=f'data/downstream/EASE_{TARGET_FS}Hz_{WIN_SEC}w_{HOP_SEC}s'
-    out_dir = convert_trials(root_folder=DATAFILES, save_root=save_root, plot=False)
+    convert_trials(root_folder=DATAFILES, save_root=save_root, plot=False)
