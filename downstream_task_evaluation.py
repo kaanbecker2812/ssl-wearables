@@ -778,6 +778,7 @@ def main(cfg):
     # ----------------------------
 
     # Load dataset
+    print("Loading data from %s and %s" % (cfg.data.X_path, cfg.data.Y_path))
     X = np.load(cfg.data.X_path)
     Y = np.load(cfg.data.Y_path)
     P = np.load(cfg.data.PID_path)  # participant IDs

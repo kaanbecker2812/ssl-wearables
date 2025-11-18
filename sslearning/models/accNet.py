@@ -948,7 +948,7 @@ class MultiIMUFusion(nn.Module):
         # 1) Shared HarNet trunk (expects [B,3,L])
         self.resnet = Resnet(output_size=class_num, n_channels=3, epoch_len=5, is_eva=True)
         # If you're on short windows, patch strides as we discussed:
-        self.resnet = patch_for_short_windows(self.resnet, L=L)
+        #self.resnet = patch_for_short_windows(self.resnet, L=L)
 
         self.fe = self.resnet.feature_extractor   # -> [B, 1024, T’]; GAP is done below
         self.gap = nn.AdaptiveAvgPool1d(1)

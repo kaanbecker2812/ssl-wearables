@@ -11,7 +11,7 @@ multi_gpu: false
 num_split: 5
 augmentation: false
 root: /Users/kaanbecker/Documents/VSCode/EASE_pretrained_models/ssl_wearables/ssl-wearables
-data_name: EASE_30Hz_0.4w_0.2s
+data_name: EASE_1000Hz_0.12w_0.09s
 
 # output paths
 model_path: "${root}/experiments/${data_name}/models/"
