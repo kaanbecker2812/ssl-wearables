@@ -273,7 +273,7 @@ def convert_trials(root_folder, save_root='data/downstream/EASE_1000Hz_120w_25s'
     np.save(f"{save_root}/X.npy", X)
     np.save(f"{save_root}/Y.npy", Y)
     np.save(f"{save_root}/pid.npy", pid)
-    print("Saved:", X.shape, Y.shape, pid.shape)
+    #print("Saved:", X.shape, Y.shape, pid.shape)
     print(save_root.split('/')[-1])
 
 if __name__ == "__main__":
