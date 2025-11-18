@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -J ease_harnet
-#SBATCH -p lrz-dgx-1-p100x8          # adjust to your GPU partition
+#SBATCH -p lrz-v100x2          # adjust to your GPU partition
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=128G                     # 64G is usually enough; raise if needed
