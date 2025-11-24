@@ -78,5 +78,5 @@ tmp
 # env file
 .env
 
-/data
 /experiments
+/data

@@ -11,12 +11,13 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 import os
 import pathlib
 
-DATAFILES = '/dss/dsshome1/06/ge38qav/DATA/raw/labeled/full*.csv' #'/Users/kaanbecker/Documents/VSCode/EASE_pretrained_models/DATA/raw/labeled_copy/full*.csv'
+DATAFILES = '/Users/kaanbecker/Documents/VSCode/EASE_pretrained_models/DATA/raw/labeled/full*.csv'
+BINARY = True # make binary classification (1: active, 0: idle)
 TARGET_FS = 1000
-WIN_SEC   = 0.120   # window length
-HOP_SEC   = 0.090  # 50% overlap
-WIN_SAMP  = int(round(WIN_SEC * TARGET_FS))  # 120
-HOP_SAMP_FLOAT = HOP_SEC * TARGET_FS         # 90.0
+WIN_SEC   = 0.200   # window length
+HOP_SEC   = 0.150  # hop length (overlap = WIN_SEC - HOP_SEC)
+WIN_SAMP  = int(round(WIN_SEC * TARGET_FS))  # 200
+HOP_SAMP_FLOAT = HOP_SEC * TARGET_FS         # 150.0
 IMUS_ACC = ['Sig_IMU_RL_Acc_', 'Sig_IMU_LL_Acc_', 
             'Sig_IMU_LU_Acc_', 'Sig_IMU_RU_Acc_',
             'Sig_IMU_Back_Acc_']
@@ -224,7 +225,7 @@ def plot_Z_with_raw_and_window_labels(
 
 # --------- EXAMPLE BATCH CONVERSION ---------
 # trials = list of dicts: {'ax':..., 'ay':..., 'az':..., 'labels':..., 'fs':..., 'pid':..., 'units': 'ms2' or 'g'}
-def convert_trials(root_folder, save_root='data/downstream/EASE_1000Hz_120w_25s', plot=False):
+def convert_trials(root_folder, save_root='data/downstream/EASE_1000Hz_120w_25s', binary=False, plot=False):
     X_trial, Y_trial, PID_trial = [], [], []
     for datafile in glob.glob(root_folder):
         data = pd.read_csv(datafile) #, index_col='Time')
@@ -249,6 +250,8 @@ def convert_trials(root_folder, save_root='data/downstream/EASE_1000Hz_120w_25s'
             y_old = Y
             X_all.append(X)
         X_trial.append(np.concatenate(X_all, axis=1))
+        if binary:
+            Y = np.where((Y==0) | (Y==3), 0, 1)  # idle vs active
         Y_trial.append(Y)
         PID_trial.append(PID)
 
@@ -277,5 +280,5 @@ def convert_trials(root_folder, save_root='data/downstream/EASE_1000Hz_120w_25s'
     print(save_root.split('/')[-1])
 
 if __name__ == "__main__":
-    save_root=f'data/downstream/EASE_{TARGET_FS}Hz_{WIN_SEC}w_{HOP_SEC}s'
-    convert_trials(root_folder=DATAFILES, save_root=save_root, plot=False)
+    save_root=f'data/downstream/EASE_{TARGET_FS}Hz_{WIN_SEC}w_{HOP_SEC}s_binary' if BINARY else f'data/downstream/EASE_{TARGET_FS}Hz_{WIN_SEC}w_{HOP_SEC}s'
+    convert_trials(root_folder=DATAFILES, save_root=save_root, binary=BINARY, plot=False)
