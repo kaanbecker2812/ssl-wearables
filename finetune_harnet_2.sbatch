@@ -35,7 +35,7 @@ nvidia-smi || true
 # run make_EASE.py to create the binary dataset
 echo "Launching make_EASE.py ..."
 cd "$CODE"
-python -m data_parsing.make_EASE --DATAFILES '/dss/dsshome1/06/ge38qav/DATA/raw/labeled/full*.csv'
+python -m data_parsing.make_EASE
 
 # ---------------- run the downstream evaluation ----------------
 echo "Launching downstream_task_evaluation.py ..."

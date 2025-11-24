@@ -11,7 +11,7 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 import os
 import pathlib
 
-DATAFILES = '/Users/kaanbecker/Documents/VSCode/EASE_pretrained_models/DATA/raw/labeled/full*.csv'
+DATAFILES = '/dss/dsshome1/06/ge38qav/DATA/raw/labeled/full*.csv' #'/Users/kaanbecker/Documents/VSCode/EASE_pretrained_models/DATA/raw/labeled/full*.csv'
 BINARY = True # make binary classification (1: active, 0: idle)
 TARGET_FS = 1000
 WIN_SEC   = 0.200   # window length
